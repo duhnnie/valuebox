@@ -28,3 +28,9 @@ type ErrorCantResolveToType struct {
 func (e ErrorCantResolveToType) Error() string {
 	return fmt.Sprintf("can't resolve \"%s\" to type: %s", e.Name, e.Type)
 }
+
+type ErrorInvalidArrayIndex string
+
+func (e ErrorInvalidArrayIndex) Error() string {
+	return fmt.Sprintf("invalid array index in %s", string(e))
+}

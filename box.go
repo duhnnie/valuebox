@@ -1,18 +1,32 @@
 package valuebox
 
-import "strings"
+import (
+	"strconv"
+	"strings"
+)
 
 type Box struct {
 	values map[string]interface{}
 }
 
-func NewRepo() *Box {
+func New() *Box {
 	return &Box{
 		values: make(map[string]interface{}),
 	}
 }
 
-func Resolve(target, path interface{}) (interface{}, error) {
+func Resolve(target, path interface{}) (res interface{}, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			if e, ok := r.(error); ok {
+				res = nil
+				err = e
+			} else {
+				panic(r)
+			}
+		}
+	}()
+
 	var newPath []string
 
 	if target == nil {
@@ -33,11 +47,20 @@ func Resolve(target, path interface{}) (interface{}, error) {
 		newPath = pathArray
 	}
 
-	if targetMap, ok := target.(map[string]interface{}); !ok {
-		return nil, ErrorResolveInvalidFirstParam
-	} else {
+	if targetMap, ok := target.(map[string]interface{}); ok {
 		newTarget := targetMap[newPath[0]]
 		return Resolve(newTarget, newPath[1:])
+	} else if targetMap, ok := target.([]interface{}); ok {
+		index, err := strconv.Atoi(newPath[0])
+
+		if err != nil {
+			return nil, ErrorInvalidArrayIndex(newPath[0])
+		}
+
+		newTarget := targetMap[index]
+		return Resolve(newTarget, newPath[1:])
+	} else {
+		return nil, ErrorResolveInvalidFirstParam
 	}
 }
 
@@ -45,7 +68,7 @@ func (r *Box) Set(name string, value interface{}) {
 	r.values[name] = value
 }
 
-func (r *Box) get(valueName string) (interface{}, error) {
+func (r *Box) Get(valueName string) (interface{}, error) {
 	path := strings.Split(valueName, ".")
 	name := path[0]
 	targetObject := r.values[name]
@@ -64,29 +87,37 @@ func (r *Box) get(valueName string) (interface{}, error) {
 }
 
 func (r *Box) GetInt64(valueName string) (int64, error) {
-	if resolvedValue, err := r.GetFloat64(valueName); err == nil {
-		return int64(resolvedValue), nil
-	} else if resolvedValue, err := r.get(valueName); err != nil {
+	if resolvedValue, err := r.Get(valueName); err != nil {
 		return 0, err
-	} else if intValue, ok := resolvedValue.(int64); !ok {
-		return 0, ErrorCantResolveToType{"int64", valueName}
-	} else {
+	} else if intValue, ok := resolvedValue.(int64); ok {
 		return intValue, nil
+	} else if intValue, ok := resolvedValue.(int32); ok {
+		return int64(intValue), nil
+	} else if intValue, ok := resolvedValue.(int16); ok {
+		return int64(intValue), nil
+	} else if intValue, ok := resolvedValue.(int8); ok {
+		return int64(intValue), nil
+	} else if intValue, ok := resolvedValue.(int); ok {
+		return int64(intValue), nil
+	} else {
+		return 0, ErrorCantResolveToType{"int64", valueName}
 	}
 }
 
 func (r *Box) GetFloat64(valueName string) (float64, error) {
-	if resolvedValue, err := r.get(valueName); err != nil {
+	if resolvedValue, err := r.Get(valueName); err != nil {
 		return 0, err
-	} else if floatValue, ok := resolvedValue.(float64); !ok {
-		return 0, ErrorCantResolveToType{"float64", valueName}
-	} else {
+	} else if floatValue, ok := resolvedValue.(float64); ok {
 		return floatValue, nil
+	} else if floatValue, ok := resolvedValue.(float32); ok {
+		return float64(floatValue), nil
+	} else {
+		return 0, ErrorCantResolveToType{"float64", valueName}
 	}
 }
 
 func (r *Box) GetBool(valueName string) (bool, error) {
-	if resolvedValue, err := r.get(valueName); err != nil {
+	if resolvedValue, err := r.Get(valueName); err != nil {
 		return false, err
 	} else if boolValue, ok := resolvedValue.(bool); !ok {
 		return false, ErrorCantResolveToType{"bool", valueName}
@@ -96,7 +127,7 @@ func (r *Box) GetBool(valueName string) (bool, error) {
 }
 
 func (r *Box) GetString(valueName string) (string, error) {
-	if resolvedValue, err := r.get(valueName); err != nil {
+	if resolvedValue, err := r.Get(valueName); err != nil {
 		return "", err
 	} else if stringValue, ok := resolvedValue.(string); !ok {
 		return "", ErrorCantResolveToType{"string", valueName}
