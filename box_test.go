@@ -1,31 +1,35 @@
 package valuebox
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"testing"
 )
 
 const misconfiguredTest = "Misconfigured test case"
 
 const (
+	get        = "Get(%s)"
 	getBool    = "GetBool(%s)"
 	getFloat64 = "GetFloat64(%s)"
-	getInt64   = "GetInt64(%s)"
 	getString  = "GetString(%s)"
+	getSlice   = "GetSlice(%s)"
+	getMap     = "GetMap(%s)"
 )
 
-type successTestCase struct {
-	setPath       string
-	setValue      interface{}
-	getFunctionID string
-	getPath       string
-	expectedValue interface{}
-	expectedError error
+type getTestCase struct {
+	box              *Box
+	setPath          string
+	setValue         []byte
+	getFunctionID    string
+	getPath          string
+	expectedValue    interface{}
+	expectedGetError error
+	expectedSetError error
 }
 
-const jsonData = `
+var jsonData = []byte(`
 {
     "albumTitle": "The Colour and The Shape",
     "artist": "Foo Fighters",
@@ -56,29 +60,58 @@ const jsonData = `
 			"title": "My Hero",
 			"released": "1998-01-19T:00:00:00"
 		}
-	]
+	],
+	"nilValue": null
 }
-`
+`)
 
-func runSuccessSetAndRetrieve(testCase successTestCase) func(t *testing.T) {
+func validateErrors(expectedError error, actualError error) func(t *testing.T) {
 	return func(t *testing.T) {
-		var err error
-		var ok bool
-		// var i int64
-		// var f float64
+		if actualError == nil && actualError == expectedError {
+			return
+		} else if (actualError == nil || expectedError == nil) && actualError != expectedError {
+			t.Errorf("wanted error \"%s\", got: \"%s\"", expectedError, actualError)
+		} else if reflect.TypeOf(actualError).Name() != reflect.TypeOf(expectedError).Name() ||
+			actualError.Error() != expectedError.Error() {
+			t.Errorf("wanted error \"%s\", got: \"%s\"", expectedError, actualError)
+		}
+	}
+}
 
-		b := New()
-		b.Set(testCase.setPath, testCase.setValue)
+func runSuccessSetAndRetrieve(testCase getTestCase) func(t *testing.T) {
+	return func(t *testing.T) {
+		var getError error
+		var ok bool
+
+		b := testCase.box
+
+		if testCase.setPath != "" {
+			setError := b.Set(testCase.setPath, testCase.setValue)
+
+			t.Run(
+				fmt.Sprintf("%s/validateSetError", t.Name()),
+				validateErrors(testCase.expectedSetError, setError),
+			)
+		}
 
 		switch testCase.getFunctionID {
+		case get:
+			var v = testCase.expectedValue
+			var r interface{}
+
+			r, getError = b.Get(testCase.getPath)
+
+			if v != r {
+				t.Errorf("wanted \"%v\", got \"%v\"", v, r)
+			}
 		case getBool:
 			var v bool
 			var r bool
 
-			r, err = b.GetBool(testCase.getPath)
+			r, getError = b.GetBool(testCase.getPath)
 
 			if v, ok = testCase.expectedValue.(bool); !ok {
-				t.Fatal(misconfiguredTest)
+				panic(misconfiguredTest)
 			}
 
 			if v != r {
@@ -88,46 +121,25 @@ func runSuccessSetAndRetrieve(testCase successTestCase) func(t *testing.T) {
 			var v float64
 			var r float64
 
-			r, err = b.GetFloat64(testCase.getPath)
+			r, getError = b.GetFloat64(testCase.getPath)
 
 			if f32, ok := testCase.expectedValue.(float32); ok {
 				v = float64(f32)
 			} else if v, ok = testCase.expectedValue.(float64); !ok {
-				t.Fatal(misconfiguredTest)
+				panic(misconfiguredTest)
 			}
 
 			if v != r {
 				t.Errorf("wanted \"%f\", got \"%f\"", v, r)
 			}
-		case getInt64:
-			var v int64
-			var r int64
-
-			r, err = b.GetInt64(testCase.getPath)
-
-			if i, ok := testCase.expectedValue.(int); ok {
-				v = int64(i)
-			} else if i8, ok := testCase.expectedValue.(int8); ok {
-				v = int64(i8)
-			} else if i16, ok := testCase.expectedValue.(int16); ok {
-				v = int64(i16)
-			} else if i32, ok := testCase.expectedValue.(int32); ok {
-				v = int64(i32)
-			} else if v, ok = testCase.expectedValue.(int64); !ok {
-				t.Fatal(misconfiguredTest)
-			}
-
-			if v != r {
-				t.Errorf("wanted \"%d\", got \"%d\"", v, r)
-			}
 		case getString:
 			var v string
 			var r string
 
-			r, err = b.GetString(testCase.getPath)
+			r, getError = b.GetString(testCase.getPath)
 
 			if v, ok = testCase.expectedValue.(string); !ok {
-				t.Fatal(misconfiguredTest)
+				panic(misconfiguredTest)
 			}
 
 			if v != r {
@@ -137,58 +149,42 @@ func runSuccessSetAndRetrieve(testCase successTestCase) func(t *testing.T) {
 			t.Fatalf("Not supported functionID: \"%s\"", testCase.getFunctionID)
 		}
 
-		if err != testCase.expectedError {
-			t.Errorf("wanted error \"%s\", got: \"%s\"", testCase.expectedError, err)
-		}
+		t.Run(
+			fmt.Sprintf("%s/validateGetError", t.Name()),
+			validateErrors(testCase.expectedGetError, getError),
+		)
 	}
 }
 
-// Test new Box initialization.
-func TestBoxInit(t *testing.T) {
-	_ = New()
-}
-
-func TestBoxSet(t *testing.T) {
-	b := New()
-
-	b.Set("name", "Andrea")
-}
-
 func TestBoxSuccesSetAndRetrieveBasic(t *testing.T) {
-	var data map[string]interface{}
+	box := New()
+	box.Set("root", jsonData)
 
-	bf := bytes.NewBuffer([]byte(jsonData))
-	json.NewDecoder(bf).Decode(&data)
+	var testCases = []getTestCase{
+		{box, "", nil, getString, "root.albumTitle", "The Colour and The Shape", nil, nil},
+		{box, "", nil, getString, "root.artist", "Foo Fighters", nil, nil},
+		{box, "", nil, getFloat64, "root.price.regular", 12.35, nil, nil},
+		{box, "", nil, getFloat64, "root.price.withMembership", 10.35, nil, nil},
+		{box, "", nil, getFloat64, "root.trackCount", float64(13), nil, nil},
+		{box, "", nil, getString, "root.releaseDate", "1997-05-20T18:25:43.511Z", nil, nil},
+		{box, "", nil, getBool, "root.soldOut", true, nil, nil},
+		{box, "", nil, getString, "root.genre.0", "alternative rock", nil, nil},
+		{box, "", nil, getString, "root.genre.1", "post-grunge", nil, nil},
+		{box, "", nil, getString, "root.genre.2", "hard-rock", nil, nil},
+		{box, "", nil, getString, "root.genre.3", "grunge", nil, nil},
+		{box, "", nil, getString, "root.genre.4", "punk rock", nil, nil},
+		{box, "", nil, getString, "root.singles.0.title", "Monkey Wrench", nil, nil},
+		{box, "", nil, getString, "root.singles.0.released", "1997-04-28T00:00:00", nil, nil},
+		{box, "", nil, getString, "root.singles.1.title", "Everlong", nil, nil},
+		{box, "", nil, getString, "root.singles.1.released", "1997-08-18T00:00:00", nil, nil},
+		{box, "", nil, getString, "root.singles.2.title", "My Hero", nil, nil},
+		{box, "", nil, getString, "root.singles.2.released", "1998-01-19T:00:00:00", nil, nil},
+		{box, "", nil, get, "root.nilValue", nil, nil, nil},
 
-	var testCases = []successTestCase{
-		{"name", "Andrea", getString, "name", "Andrea", nil},
-		{"someInt", 234, getInt64, "someInt", 234, nil},
-		{"someInt8", int8(34), getInt64, "someInt8", int8(34), nil},
-		{"someInt16", int16(234), getInt64, "someInt16", int16(234), nil},
-		{"someInt32", int32(234), getInt64, "someInt32", int32(234), nil},
-		{"someInt64", int64(234), getInt64, "someInt64", int64(234), nil},
-		{"someFloat32", float32(234.45), getFloat64, "someFloat32", float32(234.45), nil},
-		{"someFloat64", float64(234.45), getFloat64, "someFloat64", float64(234.45), nil},
-		{"someBool", true, getBool, "someBool", true, nil},
-
-		{"root", data, getString, "root.albumTitle", "The Colour and The Shape", nil},
-		{"root", data, getString, "root.artist", "Foo Fighters", nil},
-		{"root", data, getFloat64, "root.price.regular", 12.35, nil},
-		{"root", data, getFloat64, "root.price.withMembership", 10.35, nil},
-		{"root", data, getFloat64, "root.trackCount", float64(13), nil},
-		{"root", data, getString, "root.releaseDate", "1997-05-20T18:25:43.511Z", nil},
-		{"root", data, getBool, "root.soldOut", true, nil},
-		{"root", data, getString, "root.genre.0", "alternative rock", nil},
-		{"root", data, getString, "root.genre.1", "post-grunge", nil},
-		{"root", data, getString, "root.genre.2", "hard-rock", nil},
-		{"root", data, getString, "root.genre.3", "grunge", nil},
-		{"root", data, getString, "root.genre.4", "punk rock", nil},
-		{"root", data, getString, "root.singles.0.title", "Monkey Wrench", nil},
-		{"root", data, getString, "root.singles.0.released", "1997-04-28T00:00:00", nil},
-		{"root", data, getString, "root.singles.1.title", "Everlong", nil},
-		{"root", data, getString, "root.singles.1.released", "1997-08-18T00:00:00", nil},
-		{"root", data, getString, "root.singles.2.title", "My Hero", nil},
-		{"root", data, getString, "root.singles.2.released", "1998-01-19T:00:00:00", nil},
+		// Replacing values
+		{box, "root.albumTitle", []byte("\"otherTitle\""), getString, "root.albumTitle", "otherTitle", nil, nil},
+		{box, "root.artist", []byte("2"), getFloat64, "root.artist", 2.0, nil, nil},
+		{box, "root.singles.2", []byte("true"), getBool, "root.singles.2", true, nil, nil},
 	}
 
 	for _, testCase := range testCases {
@@ -198,43 +194,69 @@ func TestBoxSuccesSetAndRetrieveBasic(t *testing.T) {
 }
 
 func TestBoxErrors(t *testing.T) {
-	var data map[string]interface{}
+	box := New()
+	box.Set("root", jsonData)
 
-	bf := bytes.NewBuffer([]byte(jsonData))
-	json.NewDecoder(bf).Decode(&data)
+	var testCases = []getTestCase{
+		// ErrorCodeNoValueFound
+		{box, "", nil, getString, "root_.albumTitle", "", &ResolveError{ErrorCodeNoValueFound, "root_", nil}, nil},
+		{box, "", nil, getString, "root.artist_", "", &ResolveError{ErrorCodeNoValueFound, "root.artist_", nil}, nil},
+		{box, "", nil, getFloat64, "root_.price.regular", 0.0, &ResolveError{ErrorCodeNoValueFound, "root_", nil}, nil},
+		{box, "", nil, getFloat64, "root.price.withMembership_", 0.0, &ResolveError{ErrorCodeNoValueFound, "root.price.withMembership_", nil}, nil},
+		{box, "", nil, getBool, "root_.soldOut", false, &ResolveError{ErrorCodeNoValueFound, "root_", nil}, nil},
+		{box, "", nil, getBool, "root.soldOut_", false, &ResolveError{ErrorCodeNoValueFound, "root.soldOut_", nil}, nil},
+		{box, "", nil, getString, "root_.genre.0", "", &ResolveError{ErrorCodeNoValueFound, "root_", nil}, nil},
+		{box, "", nil, getString, "root.genre_.1", "", &ResolveError{ErrorCodeNoValueFound, "root.genre_", nil}, nil},
+		{box, "", nil, getString, "root_.singles.0.title", "", &ResolveError{ErrorCodeNoValueFound, "root_", nil}, nil},
+		{box, "", nil, getString, "root.singles_.1.title", "", &ResolveError{ErrorCodeNoValueFound, "root.singles_", nil}, nil},
+		{box, "", nil, getString, "root.singles.2.released_", "", &ResolveError{ErrorCodeNoValueFound, "root.singles.2.released_", nil}, nil},
 
-	var testCases = []successTestCase{
-		// ErrorNoValueFound
-		{"name", "Andrea", getString, "otherName", "", ErrorNoValueFound("otherName")},
-		{"someInt", 234, getInt64, "otherInt", 0, ErrorNoValueFound("otherInt")},
-		{"someFloat32", 765.3, getFloat64, "otherFloat", 0.0, ErrorNoValueFound("otherFloat")},
-		{"someBool", true, getBool, "otherBool", false, ErrorNoValueFound("otherBool")},
-		{"root", data, getString, "root_.albumTitle", "", ErrorNoValueFound("root_.albumTitle")},
-		{"root", data, getString, "root.artist_", "", ErrorNoValueFound("root.artist_")},
-		{"root", data, getFloat64, "root_.price.regular", 0.0, ErrorNoValueFound("root_.price.regular")},
-		{"root", data, getFloat64, "root.price.withMembership_", 0.0, ErrorNoValueFound("root.price.withMembership_")},
-		{"root", data, getBool, "root_.soldOut", false, ErrorNoValueFound("root_.soldOut")},
-		{"root", data, getBool, "root.soldOut_", false, ErrorNoValueFound("root.soldOut_")},
-		{"root", data, getString, "root_.genre.0", "", ErrorNoValueFound("root_.genre.0")},
-		{"root", data, getString, "root.genre_.1", "", ErrorNoValueFound("root.genre_.1")},
-		{"root", data, getString, "root_.singles.0.title", "", ErrorNoValueFound("root_.singles.0.title")},
-		{"root", data, getString, "root.singles_.1.title", "", ErrorNoValueFound("root.singles_.1.title")},
-		{"root", data, getString, "root.singles.2.released_", "", ErrorNoValueFound("root.singles.2.released_")},
+		// ErrorCodeInvalidArrayIndex
+		{box, "", nil, getString, "root.genre.c", "", &ResolveError{ErrorCodeNonNumericArrayIndex, "root.genre.c", nil}, nil},
+		{box, "", nil, get, "root.singles.nonNumeric", nil, &ResolveError{ErrorCodeNonNumericArrayIndex, "root.singles.nonNumeric", nil}, nil},
 
-		// ErrorCantResolveToType
-		{"name", 12, getString, "name", "", ErrorCantResolveToType{"string", "name"}},
-		{"someInt", "234", getInt64, "someInt", 0, ErrorCantResolveToType{"int64", "someInt"}},
-		{"someFloat64", false, getFloat64, "someFloat64", 0.0, ErrorCantResolveToType{"float64", "someFloat64"}},
-		{"someBool", 34.21, getBool, "someBool", false, ErrorCantResolveToType{"bool", "someBool"}},
+		// TypeResolvingError
+		{box, "", nil, getString, "root.price.regular", "", &TypeResolvingError{"string", "root.price.regular"}, nil},
+		{box, "", nil, getFloat64, "root.soldOut", 0.0, &TypeResolvingError{"float64", "root.soldOut"}, nil},
+		{box, "", nil, getBool, "root.genre.0", false, &TypeResolvingError{"bool", "root.genre.0"}, nil},
 
-		{"root", data, getFloat64, "root.artist", 0.0, ErrorCantResolveToType{"float64", "root.artist"}},
-		{"root", data, getBool, "root.price.regular", false, ErrorCantResolveToType{"bool", "root.price.regular"}},
-		{"root", data, getString, "root.soldOut", "", ErrorCantResolveToType{"string", "root.soldOut"}},
-		{"root", data, getInt64, "root.genre.0", 0, ErrorCantResolveToType{"int64", "root.genre.0"}},
+		// Replacing values
+		{box, "root.albumTitle.0", []byte("\"otherTitle\""), getString, "root.albumTitle.0", "", &ResolveError{ErrorCodeNoValueFound, "root.albumTitle.0", nil}, &ResolveError{ErrorCodeNotAMapOrSlice, "root.albumTitle", nil}},
+		{box, "root.artist.isBand", []byte("true"), getBool, "root.artist.isBand", false, &ResolveError{ErrorCodeNoValueFound, "root.artist.isBand", nil}, &ResolveError{ErrorCodeNotAMapOrSlice, "root.artist", nil}},
 	}
 
 	for _, testCase := range testCases {
 		getDescription := fmt.Sprintf(testCase.getFunctionID, testCase.getPath)
 		t.Run(fmt.Sprintf("Set(%s,%T)|%s", testCase.setPath, testCase.setValue, getDescription), runSuccessSetAndRetrieve(testCase))
 	}
+}
+
+func TestComplexReplacements(t *testing.T) {
+	box := New()
+	box.Set("root", jsonData)
+
+	mySlice := []string{"rock alternativo", "rock de los 90s"}
+
+	mySliceInBytes, err := json.Marshal(mySlice)
+	if err != nil {
+		panic(err)
+	}
+
+	box.Set("root.genre", mySliceInBytes)
+	otherSlice, err := box.GetSlice("root.genre")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(otherSlice) != len(mySlice) {
+		t.Fatalf("returned slice doesn't have the same len, expected: %d, got: %d", len(mySlice), len(otherSlice))
+	}
+
+	for index, el := range mySlice {
+		if el != otherSlice[index].(string) {
+			t.Fatalf("Not equal")
+		}
+	}
+
+	// TODO: test replacement of objects
 }
