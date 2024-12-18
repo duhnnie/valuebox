@@ -30,7 +30,6 @@ func resolve(target interface{}, path []string) (res interface{}, errPath string
 	defer func() {
 		if r := recover(); r != nil {
 			if e, ok := r.(*ResolveError); ok {
-				// e.Path = append(path[:1], e.Path...)
 				e.Path = strings.Join(append(path[:1], e.Path), ".")
 				panic(e)
 			} else if e, ok := r.(error); ok {
