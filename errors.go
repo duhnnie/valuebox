@@ -1,36 +1,37 @@
 package valuebox
 
-import "fmt"
-
-type Error string
-
-const (
-	ErrorResolveInvalidParams     = Error("second argument needs to be a string or a slice of strings.")
-	ErrorResolveInvalidFirstParam = Error("\"target\" parameter should be a \"map[string]interface{}\" when second argument is not an empty string nor empty string slice")
-	ErrorTargetIsNIL              = Error("\"target\" parameter is nil")
+import (
+	"fmt"
 )
 
-func (err Error) Error() string {
-	return string(err)
+type ErrorCode string
+
+const (
+	ErrorCodeOther                = ErrorCode("other_error")
+	ErrorCodeNoValueFound         = ErrorCode("no_value_found")
+	ErrorCodeNonNumericArrayIndex = ErrorCode("non_numeric_array_index")
+	ErrorCodeNotAMapOrSlice       = ErrorCode("not_a_map_or_slice")
+)
+
+type ResolveError struct {
+	Code ErrorCode
+	Path string
+	Err  error
 }
 
-type ErrorNoValueFound string
+func (e ResolveError) Error() string {
+	if e.Code == ErrorCodeOther {
+		return fmt.Sprintf("(%s) %s", e.Path, e.Err)
+	}
 
-func (e ErrorNoValueFound) Error() string {
-	return fmt.Sprintf("no value was found for \"%s\"", string(e))
+	return fmt.Sprintf("(%s) %s", e.Path, e.Code)
 }
 
-type ErrorCantResolveToType struct {
+type TypeResolvingError struct {
 	Type string
-	Name string
+	Path string
 }
 
-func (e ErrorCantResolveToType) Error() string {
-	return fmt.Sprintf("can't resolve \"%s\" to type: %s", e.Name, e.Type)
-}
-
-type ErrorInvalidArrayIndex string
-
-func (e ErrorInvalidArrayIndex) Error() string {
-	return fmt.Sprintf("invalid array index in %s", string(e))
+func (e TypeResolvingError) Error() string {
+	return fmt.Sprintf("(%s) can't resolve to type: %s", e.Path, e.Type)
 }
