@@ -274,3 +274,15 @@ func (b *Box) GetFloat64Map(valueName string) (map[string]float64, error) {
 func (b *Box) GetStringMap(valueName string) (map[string]string, error) {
 	return toConcreteMap[string](b, valueName)
 }
+
+func (b *Box) ValueToJSON(valueName string) ([]byte, error) {
+	if value, err := b.Get(valueName); err != nil {
+		return nil, err
+	} else {
+		return json.Marshal(value)
+	}
+}
+
+func (b *Box) ToJSON() ([]byte, error) {
+	return json.Marshal(b.values)
+}
