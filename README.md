@@ -48,7 +48,7 @@ func main() {
 	}, 0.0) / float64(len(grades))
 
 	summary := fmt.Sprintf(
-		"\"Hi, my name is %s, I'm %d, my hobbies are %s, my average grades is %0.2f\"",
+		"\"Hi, my name is %s, I'm %d, my hobbies are %s, my grades average is %0.2f\"",
 		name,
 		int(age)+1,
 		strings.Join(hobbies, ", "),
@@ -58,7 +58,7 @@ func main() {
 	_ = b.Set("myJSON.summary", []byte(summary)) 
 	j, _ = b.ToJSON() 
 	// You can also use b.ValueToJSON("myJSON") for getting only that part of the JSON
-	
+
 	fmt.Println(string(j))
 }
 ```
