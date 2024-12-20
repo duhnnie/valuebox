@@ -24,19 +24,6 @@ import (
 	"github.com/duhnnie/valuebox"
 )
 
-type SupportedTypes interface {
-	[]any | int64 | string | float64 | bool | int | map[string]interface{}
-}
-
-type MyStruct struct {
-	Name string
-	Age  int
-}
-
-func Set[T SupportedTypes](x T) {
-	fmt.Printf("Setting %T %v\n", x, x)
-}
-
 func main() {
 	b := valuebox.New()
 
