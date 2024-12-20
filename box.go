@@ -7,22 +7,6 @@ import (
 	"strings"
 )
 
-type jsonTypes interface {
-	float64 | string | bool | interface{}
-}
-
-type jsonArrayTypes interface {
-	[]float64 | []string | []bool | []interface{}
-}
-
-type jsonObjectTypes interface {
-	map[string]interface{} | map[string]float64 | map[string]bool | map[string]string
-}
-
-type allJsonTypes interface {
-	jsonTypes | jsonArrayTypes | jsonObjectTypes
-}
-
 type Box struct {
 	values map[string]interface{}
 }
@@ -113,7 +97,7 @@ func internalGet(b *Box, valueName string) (res interface{}, err error) {
 	return res, nil
 }
 
-func internalGenericGet[T jsonTypes](b *Box, valueName string) (res T, err error) {
+func internalGenericGet[T any](b *Box, valueName string) (res T, err error) {
 	var value T
 
 	if resolvedValue, err := internalGet(b, valueName); err != nil {
@@ -125,7 +109,7 @@ func internalGenericGet[T jsonTypes](b *Box, valueName string) (res T, err error
 	}
 }
 
-func toConcreteSlice[T jsonTypes](b *Box, valueName string) ([]T, error) {
+func toConcreteSlice[T any](b *Box, valueName string) ([]T, error) {
 	if resolvedValue, err := internalGet(b, valueName); err != nil {
 		return nil, err
 	} else if slice, ok := resolvedValue.([]interface{}); !ok {
@@ -145,7 +129,7 @@ func toConcreteSlice[T jsonTypes](b *Box, valueName string) ([]T, error) {
 	}
 }
 
-func toConcreteMap[T jsonTypes](b *Box, valueName string) (map[string]T, error) {
+func toConcreteMap[T any](b *Box, valueName string) (map[string]T, error) {
 	if resolvedValue, err := internalGet(b, valueName); err != nil {
 		return nil, err
 	} else if m, ok := resolvedValue.(map[string]interface{}); !ok {
