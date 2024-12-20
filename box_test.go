@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -259,4 +260,49 @@ func TestComplexReplacements(t *testing.T) {
 	}
 
 	// TODO: test replacement of objects
+}
+
+func TestToJSON(t *testing.T) {
+	expected := `{"myJSON":{"age":20,"grades":{"english":9,"maths":10,"science":8},"hobbies":["music","programming","outdoors"],"isStudent":true,"name":"Pepito","summary":"Hi, my name is Pepito, I'm 21, my hobbies are music, programming, outdoors, my average grades is 9.00"}}`
+
+	b := New()
+
+	j := []byte(`{
+		"name": "Pepito",
+		"age": 20
+	}`)
+
+	b.Set("myJSON", j)
+	b.Set("myJSON.name", []byte("Pepito Watson"))
+	b.Set("myJSON.isStudent", []byte("true"))
+	b.Set("myJSON.hobbies", []byte(`["music", "programming", "outdoors"]`))
+	b.Set("myJSON.grades", []byte(`{"maths": 10, "english": 9, "science": 8}`))
+
+	name, _ := b.GetString("myJSON.name")
+	age, _ := b.GetFloat64("myJSON.age")
+	hobbies, _ := b.GetStringSlice("myJSON.hobbies")
+	grades, _ := b.GetFloat64Map("myJSON.grades")
+
+	gradesTotal := 0.0
+
+	for _, v := range grades {
+		gradesTotal += v
+	}
+
+	gradesAvg := gradesTotal / float64(len(grades))
+
+	summary := fmt.Sprintf(
+		"\"Hi, my name is %s, I'm %d, my hobbies are %s, my average grades is %0.2f\"",
+		name,
+		int(age)+1,
+		strings.Join(hobbies, ", "),
+		gradesAvg,
+	)
+
+	_ = b.Set("myJSON.summary", []byte(summary))
+	j, _ = b.ToJSON()
+
+	if string(j) != expected {
+		t.Fatalf("Expected: %s, got: %s", expected, j)
+	}
 }
