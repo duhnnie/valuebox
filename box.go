@@ -281,3 +281,19 @@ func (b *Box) ToJSON() ([]byte, error) {
 	b.initializeIfItisnt()
 	return json.Marshal(b.values)
 }
+
+func (b *Box) ToMap() (map[string]interface{}, error) {
+	var res map[string]interface{}
+
+	data, err := b.ToJSON()
+
+	if err != nil {
+		return nil, err
+	}
+
+	if err = json.Unmarshal(data, &res); err != nil {
+		return nil, err
+	}
+
+	return res, nil
+}
