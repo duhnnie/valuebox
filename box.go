@@ -12,9 +12,10 @@ type Box struct {
 }
 
 func New() *Box {
-	return &Box{
-		values: make(map[string]interface{}),
-	}
+	b := Box{}
+	b.initializeIfItisnt()
+
+	return &b
 }
 
 func deleteme(path string) func(interface{}, string, ErrorCode) (interface{}, string, ErrorCode) {
@@ -79,6 +80,8 @@ func internalGet(b *Box, valueName string) (res interface{}, err error) {
 			}
 		}
 	}()
+
+	b.initializeIfItisnt()
 
 	path := strings.Split(valueName, ".")
 	name := path[0]
@@ -149,6 +152,12 @@ func toConcreteMap[T any](b *Box, valueName string) (map[string]T, error) {
 	}
 }
 
+func (b *Box) initializeIfItisnt() {
+	if b.values == nil {
+		b.values = make(map[string]interface{})
+	}
+}
+
 func (b *Box) setToMap(m map[string]interface{}, key string, data []byte) error {
 	var value interface{}
 
@@ -193,6 +202,7 @@ func (b *Box) set(path []string, key string, data []byte) error {
 }
 
 func (b *Box) Set(name string, data []byte) error {
+	b.initializeIfItisnt()
 	path := strings.Split(name, ".")
 	parentPath := path[:len(path)-1]
 
@@ -268,5 +278,6 @@ func (b *Box) ValueToJSON(valueName string) ([]byte, error) {
 }
 
 func (b *Box) ToJSON() ([]byte, error) {
+	b.initializeIfItisnt()
 	return json.Marshal(b.values)
 }
