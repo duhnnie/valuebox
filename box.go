@@ -11,11 +11,13 @@ type Box struct {
 	values map[string]interface{}
 }
 
-func New() *Box {
-	b := Box{}
-	b.initializeIfItisnt()
-
+func NewWithValues(v map[string]interface{}) *Box {
+	b := Box{v}
 	return &b
+}
+
+func New() *Box {
+	return NewWithValues(make(map[string]interface{}))
 }
 
 func deleteme(path string) func(interface{}, string, ErrorCode) (interface{}, string, ErrorCode) {
