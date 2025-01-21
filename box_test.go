@@ -306,3 +306,39 @@ func TestToJSON(t *testing.T) {
 		t.Fatalf("Expected: %s, got: %s", expected, j)
 	}
 }
+
+func TestNewWithValues(t *testing.T) {
+	initialValues := map[string]interface{}{
+		"key1": "value1",
+		"key2": 2.0,
+		"key3": true,
+		"key4": []interface{}{"elem1", "elem2"},
+		"key5": map[string]interface{}{"subkey1": "subvalue1"},
+	}
+
+	box := NewWithValues(initialValues)
+
+	tests := []struct {
+		path     string
+		expected interface{}
+	}{
+		{"key1", "value1"},
+		{"key2", 2.0},
+		{"key3", true},
+		{"key4.0", "elem1"},
+		{"key4.1", "elem2"},
+		{"key5.subkey1", "subvalue1"},
+	}
+
+	for _, test := range tests {
+		t.Run(test.path, func(t *testing.T) {
+			value, err := box.Get(test.path)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if !reflect.DeepEqual(value, test.expected) {
+				t.Errorf("expected %v, got %v", test.expected, value)
+			}
+		})
+	}
+}
